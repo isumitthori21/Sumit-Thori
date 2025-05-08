@@ -13,12 +13,11 @@ def Section():
 
     with col1:
             st.subheader("📊 Data Generation")
-            st.info("Generate synthetic diabetes data using the Pima Indian dataset and analyze its characteristics.")
+            st.info("Generate synthetic diabetes data and analyze its characteristics. The model was trained using a combination of PIMA India Dataset and other diabetes dataset fom Kaggle")
 
     with col2:
             st.subheader("🛠️ Custom Model")
             st.info("Train a custom generative model on your dataset to generate synthetic data.")
-
 
     with col3:
             st.subheader("📈 Evaluation")
