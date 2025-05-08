@@ -3,11 +3,10 @@ import pandas as pd
 from sdv.single_table import CTGANSynthesizer, TVAESynthesizer
 from sdv.metadata import SingleTableMetadata
 from datetime import datetime
-from sklearn.preprocessing import StandardScaler
-
-
+import pickle
 import os
-from Components.metrics import load_data, load_metadata, plot_distribution, plot_column_shape, run_all_metrics, plot_distributions, generate_report
+from Components.metrics import  plot_distributions, generate_report
+from Components.metrics_final import plot_single, heatmap_matrix
 
 def preprocess_data(df: pd.DataFrame) -> pd.DataFrame:
     # Drop columns with all nulls
@@ -27,7 +26,7 @@ def preprocess_data(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 def Section():
-    tab1, tab2 = st.tabs(["📌 Train New Model", "♻️ Continue Existing Model"])
+    tab1, tab2 = st.tabs(["📌 Train New Model", "♻️ Use Custom Model"])
 
     # --- TAB 1: Train New Model ---
     with tab1:
@@ -55,58 +54,58 @@ def Section():
                     st.session_state.custom_metadata = metadata
 
                 st.success(f"{model_type} model trained successfully!")
+            if 'custom_model' in st.session_state:
+                if st.button("💾 Save Trained Model"):
+                    os.makedirs("saved_models", exist_ok=True)
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    model_path = f"saved_models/custom_model_{timestamp}.pkl"
+                    st.session_state.custom_model.save(model_path)
+                    st.success(f"Model saved to `{model_path}`")
+                
 
     # --- TAB 2: Continue Existing Model ---
     with tab2:
         model_file = st.file_uploader("Upload trained model (.pkl)", type="pkl")
-        new_data_file = st.file_uploader("Upload new training data (CSV)", type="csv", key="continue_data")
 
-        if model_file and new_data_file:
-            user_data = pd.read_csv(new_data_file)
-            st.write("Preview of new data:")
-            st.dataframe(user_data)
+        if model_file:
+            # Load model once uploaded
+            loaded_model = pickle.load(model_file)
+            st.session_state['custom_model'] = loaded_model
+            st.divider()
+            st.subheader("✅ Model Ready")
 
-            if st.button("🔄 Continue Training"):
-                with st.spinner("Loading and training..."):
-                    model = CTGANSynthesizer.load(model_file)  # Works for both CTGAN and TVAE
-                    metadata = SingleTableMetadata()
-                    metadata.detect_from_dataframe(user_data)
+            n_samples = st.slider("Number of synthetic rows to generate", 10, 1000, 100)
 
-                    model.fit(user_data)
+            if st.button("🎲 Generate Synthetic Data"):
+                synthetic = st.session_state['custom_model'].sample(n_samples)
+                st.session_state['synthetic_data'] = synthetic
+                st.success(f"{n_samples} synthetic rows generated.")
+                st.dataframe(synthetic)
+                if synthetic is not None:
+                    st.dataframe(synthetic)
 
-                    st.session_state.custom_model = model
-                    st.session_state.user_data = user_data
-                    st.session_state.custom_metadata = metadata
+                    col1, col2, col3 = st.columns([1, 1, 1])
 
-                st.success("Model retrained successfully!")
+                    with col1:
+                        st.download_button(
+                            "⬇️ Download CSV",
+                            synthetic.to_csv(index=False).encode("utf-8"),
+                            "synthetic_data.csv",
+                            "text/csv",
+                            key="download-csv"
+                        )
 
-    # --- Shared: Generate, Save, Evaluate ---
-    if 'custom_model' in st.session_state:
-        st.divider()
-        st.subheader("✅ Model Ready")
+        if 'synthetic_data' in st.session_state:
+            st.subheader("📊 Analyze")
+            synthetic_data = st.session_state['synthetic_data']
 
-        n_samples = st.slider("Number of synthetic rows to generate", 10, 1000, 100)
+            # Button sets a flag in session_state
+            if st.button("🧪 Run Evaluation"):
+                st.session_state['run_evaluation'] = True
 
-        if st.button("🎲 Generate Synthetic Data"):
-            synthetic = st.session_state.custom_model.sample(n_samples)
-            st.session_state.synthetic_data = synthetic
-            st.success(f"{n_samples} synthetic rows generated.")
-            st.dataframe(synthetic)
-
-        if st.button("💾 Save Trained Model"):
-            os.makedirs("saved_models", exist_ok=True)
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            model_path = f"saved_models/custom_model_{timestamp}.pkl"
-            st.session_state.custom_model.save(model_path)
-            st.success(f"Model saved to `{model_path}`")
-
-    if 'synthetic_data' in st.session_state:
-        st.subheader("📊 Evaluation")
-
-        real_data = st.session_state.user_data
-        synthetic_data = st.session_state.synthetic_data
-        metadata = st.session_state.custom_metadata
-
-        if st.button("🧪 Run Evaluation"):
-            plot_distributions(real_data, synthetic_data)
-            generate_report(real_data, synthetic_data, metadata)
+            # Check persistent flag after rerun
+            if st.session_state.get('run_evaluation', False):
+                st.write("📈 Plot Pair Distribution")
+                plot_single(synthetic_data)
+                st.write("📊 HeatMap Matrix")
+                heatmap_matrix(synthetic_data) 
