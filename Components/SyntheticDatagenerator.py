@@ -10,7 +10,7 @@ from Components.metrics import plot_distribution, plot_column_shape, plot_distri
 def Section():
     @st.cache_resource
     def load_ctgan_model():
-        return CTGANSynthesizer.load('model/ctgan_model.pkl')
+        return CTGANSynthesizer.load('model/custom_ctgan_model.pkl')
 
     def load_tvae_model():
         return TVAESynthesizer.load('model/tvae_model.pkl')
